@@ -38,7 +38,7 @@ h1, h2 { margin: 0 0 8px; }
   background: radial-gradient(ellipse at top, rgba(200,16,46,.35), transparent 60%), rgba(2,6,23,.55); padding: 16px; }
 .login-card { width: min(380px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px;
   box-shadow: 0 30px 80px rgba(0,0,0,.5); display: grid; gap: 12px; }
-.logo { font: 800 44px/1 inherit; letter-spacing: 6px; color: var(--gold); text-align: center; margin-bottom: 6px; }
+.logo { font: 800 38px/1.1 inherit; letter-spacing: 1px; color: var(--gold); text-align: center; margin-bottom: 6px; }
 .logo span { display: block; font-size: 13px; letter-spacing: 1px; color: var(--muted); font-weight: 400; margin-top: 8px; }
 label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
 input { background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--text); padding: 11px 12px; border-radius: 10px;

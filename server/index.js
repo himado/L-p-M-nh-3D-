@@ -1,4 +1,4 @@
-// Doha server: phục vụ file tĩnh, REST API (tài khoản, kinh tế, câu hỏi) và WebSocket (đồng bộ lớp học).
+// Lớp mình 3D server: phục vụ file tĩnh, REST API (tài khoản, kinh tế, câu hỏi) và WebSocket (đồng bộ lớp học).
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -472,4 +472,4 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { sockets.delete(ws); leave(ws); });
 });
 
-server.listen(PORT, () => console.log(`Doha đang chạy tại http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Lớp mình 3D đang chạy tại http://localhost:${PORT}`));

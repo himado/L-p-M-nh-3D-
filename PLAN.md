@@ -1,4 +1,4 @@
-# DOHA — Lớp học ảo 3D & Kho tàng tri thức
+# Lớp mình 3D — Lớp học ảo 3D & Kho tàng tri thức
 
 ## 1. Concept tóm tắt
 
@@ -89,7 +89,7 @@ Node.js server (server/index.js)
 
 ## 6. Tính năng phụ phổ biến trong game: research & gợi ý
 
-| Tính năng | Game tham khảo | Áp dụng cho Doha | Trạng thái |
+| Tính năng | Game tham khảo | Áp dụng cho Lớp mình 3D | Trạng thái |
 |---|---|---|---|
 | **Điểm danh 7 ngày** | Genshin, Liên Quân | Chuỗi 7 ngày, ngày 7 tặng 5💎, lỡ 1 ngày thì tính lại | ✅ |
 | **Nhiệm vụ ngày** | Hầu hết game mobile | Trả lời đúng 10 câu, vượt 1 ải, nộp bài, chat, viết bảng | ✅ |
