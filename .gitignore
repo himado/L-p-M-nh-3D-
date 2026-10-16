@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Dữ liệu runtime (tài khoản, phiên đăng nhập, mật khẩu đã băm) — không commit
+server/db.json
+*.db
+*.sqlite
+
+# Biến môi trường / bí mật
+.env
+.env.*
+!.env.example
+
+# Log
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build / cache
+dist/
+build/
+.cache/
+coverage/
+*.tmp
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code (cài đặt cá nhân)
+.claude/settings.local.json

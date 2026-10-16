@@ -1,0 +1,14 @@
+{
+  "name": "doha-virtual-classroom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lớp học ảo 3D nhiều người chơi + Kho tàng tri thức văn hóa",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

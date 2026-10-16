@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Doha · Lớp học ảo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ===== Đăng nhập ===== -->
+  <section id="screen-login" class="screen">
+    <div class="login-card">
+      <div class="logo">DOHA<span>Lớp học ảo · Kho tàng tri thức</span></div>
+      <label>Tên nhân vật<input id="login-name" maxlength="20" autocomplete="username" placeholder="vd: Tân"></label>
+      <label>Mật khẩu<input id="login-pw" type="password" autocomplete="current-password" placeholder="••••"></label>
+      <div class="row">
+        <button id="btn-login" class="btn primary">Đăng nhập</button>
+        <button id="btn-register" class="btn">Tạo nhân vật</button>
+      </div>
+      <p id="login-error" class="error"></p>
+    </div>
+  </section>
+
+  <!-- ===== Thanh trên ===== -->
+  <header id="topbar" class="hidden">
+    <div class="who"><b id="tb-name"></b><span id="tb-level" class="lv"></span></div>
+    <div class="cur" title="Xu"><span>🪙</span><b id="tb-coins">0</b></div>
+    <div class="cur" title="Kim cương"><span>💎</span><b id="tb-gems">0</b></div>
+    <div id="tb-event" class="event-pill hidden"></div>
+    <nav>
+      <button data-nav="class" class="btn sm">🏫 Lớp học</button>
+      <button data-nav="quest" class="btn sm">🗺️ Kho tàng</button>
+      <button data-nav="shop" class="btn sm">🛍️ Cửa hàng <kbd>B</kbd></button>
+      <button data-nav="events" class="btn sm">🎉 Sự kiện <kbd>N</kbd><i id="tb-dot" class="dot hidden"></i></button>
+      <button data-nav="menu" class="btn sm ghost" title="Về sảnh">⌂</button>
+      <button data-nav="logout" class="btn sm ghost" title="Đăng xuất">⏏</button>
+    </nav>
+  </header>
+
+  <!-- ===== Sảnh chính ===== -->
+  <section id="menu" class="hidden">
+    <h1>Xin chào, <span id="menu-name"></span>!</h1>
+    <p class="sub">Chọn nơi bạn muốn đến hôm nay</p>
+    <div class="cards">
+      <button class="card" data-nav="class"><i>🏫</i><b>Vào lớp học</b><span>Chọn chỗ ngồi, làm bài, viết bảng, trò chuyện cùng bạn bè</span></button>
+      <button class="card" data-nav="quest"><i>🗺️</i><b>Kho tàng tri thức</b><span>Vượt 10 ải câu hỏi văn hóa, nhận rương báu</span></button>
+      <button class="card" data-nav="shop"><i>🛍️</i><b>Cửa hàng</b><span>Áo dài, nón lá, đèn ông sao… và khóa học mới</span></button>
+      <button class="card" data-nav="events"><i>🎉</i><b>Sự kiện</b><span>Điểm danh, nhiệm vụ ngày, lễ hội, bảng xếp hạng</span></button>
+    </div>
+  </section>
+
+  <!-- ===== HUD lớp học ===== -->
+  <section id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="view-label">TPP</div>
+    <div id="teacher-eye" title="Ánh mắt cô giáo">👁️<span>Cô giáo</span></div>
+    <div id="click-hint">Click vào màn hình để điều khiển</div>
+    <aside id="help">
+      <b>Điều khiển</b>
+      <div><kbd>W A S D</kbd> di chuyển · <kbd>Shift</kbd> chạy</div>
+      <div><kbd>Chuột</kbd> xoay · <kbd>Chuột phải</kbd> ngắm gần · <kbd>Lăn</kbd> zoom</div>
+      <div><kbd>V</kbd> đổi TPP/FPP · <kbd>Alt</kbd> giữ để nhìn tự do</div>
+      <div><kbd>E</kbd> ngồi / đứng / viết bảng · <kbd>X</kbd> làm bài · <kbd>F</kbd> xem bài</div>
+      <div><kbd>1</kbd> vẫy tay <kbd>2</kbd> giơ tay <kbd>3</kbd> vỗ tay <kbd>4</kbd> gật đầu</div>
+      <div><kbd>Enter</kbd> chat · <kbd>H</kbd> ẩn bảng này</div>
+    </aside>
+    <div id="chat">
+      <div id="chat-log"></div>
+      <div class="chat-row">
+        <button id="chat-scope" class="btn sm" title="Tab để đổi">Cả lớp</button>
+        <input id="chat-input" maxlength="200" placeholder="Nhấn Enter để trò chuyện…">
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Công cụ bảng đen ===== -->
+  <div id="board-tools" class="hidden">
+    <span>Phấn:</span><div id="chalk-list"></div>
+    <label>Cỡ <input id="chalk-size" type="range" min="3" max="24" value="7"></label>
+    <button id="board-clear" class="btn sm">🧽 Lau bảng</button>
+    <button id="board-exit" class="btn sm primary">Xong (Esc)</button>
+  </div>
+
+  <!-- ===== HUD vượt ải ===== -->
+  <section id="quest-hud" class="hidden">
+    <div class="q-stats"><span id="qh-hearts"></span><span>🪙 <b id="qh-coins">0</b></span><span>🔥 <b id="qh-streak">0</b></span><span id="qh-mul"></span></div>
+    <div class="q-progress"><div id="qh-bar"></div></div>
+    <button id="qh-exit" class="btn sm ghost">Thoát</button>
+  </section>
+
+  <!-- ===== Modal ===== -->
+  <div id="modal-seat" class="modal"><div class="panel">
+    <h2>Chọn chỗ ngồi</h2>
+    <div class="board-label">BẢNG ĐEN</div>
+    <div id="seat-grid"></div>
+    <div class="legend"><span><i class="s free"></i>Trống</span><span><i class="s npc"></i>Bạn ảo (vẫn ngồi được)</span><span><i class="s taken"></i>Người chơi</span></div>
+    <div class="row end"><button class="btn ghost" data-close>Hủy</button><button id="seat-stand" class="btn">Vào lớp (đứng ở cửa)</button></div>
+  </div></div>
+
+  <div id="modal-exam" class="modal"><div class="panel wide">
+    <div class="exam-head"><h2>📝 Bài kiểm tra văn hóa</h2><div id="exam-timer">06:00</div></div>
+    <div id="exam-nav"></div>
+    <div id="exam-body"></div>
+    <p class="hint">Giữ <kbd>C</kbd> để liếc bài bạn bên cạnh — bài bạn ấy <b>chưa chắc đã đúng</b>, và nhớ để ý <b>ánh mắt cô giáo</b>! Bị bắt: −20 xu/lần.</p>
+    <div class="row end"><button id="exam-prev" class="btn">◀</button><button id="exam-next" class="btn">▶</button><button id="exam-submit" class="btn primary">Nộp bài</button></div>
+  </div></div>
+
+  <div id="modal-pack" class="modal"><div class="panel">
+    <h2>🗺️ Kho tàng tri thức</h2>
+    <p class="sub">Vượt 10 ải, mỗi ải một câu hỏi. Có 3 trái tim — sai mất 1 tim. Về đích để mở rương báu!</p>
+    <div id="pack-list" class="pack-list"></div>
+    <div class="row end"><button class="btn ghost" data-close>Đóng</button></div>
+  </div></div>
+
+  <div id="modal-qq" class="modal noclose"><div class="panel">
+    <div class="qq-head"><span id="qq-step"></span><span id="qq-timer"></span></div>
+    <h2 id="qq-text"></h2>
+    <div id="qq-options" class="options"></div>
+    <p id="qq-exp" class="exp hidden"></p>
+    <div class="row end"><button id="qq-next" class="btn primary hidden">Tiếp tục ▶</button></div>
+  </div></div>
+
+  <div id="modal-result" class="modal noclose"><div class="panel center">
+    <div id="result-body"></div>
+    <div class="row center"><button id="result-again" class="btn">Chơi lại</button><button id="result-menu" class="btn primary">Về sảnh</button></div>
+  </div></div>
+
+  <div id="modal-shop" class="modal"><div class="panel xwide">
+    <div class="shop-head"><h2>🛍️ Cửa hàng</h2><div id="shop-tabs" class="tabs"></div><button class="btn ghost sm" data-close>✕</button></div>
+    <div class="shop-body">
+      <div id="shop-grid"></div>
+      <aside class="shop-side">
+        <canvas id="shop-preview" width="300" height="340"></canvas>
+        <div id="shop-detail"></div>
+      </aside>
+    </div>
+  </div></div>
+
+  <div id="modal-events" class="modal"><div class="panel wide">
+    <div class="shop-head"><h2>🎉 Sự kiện</h2><div id="ev-tabs" class="tabs"></div><button class="btn ghost sm" data-close>✕</button></div>
+    <div id="ev-body"></div>
+  </div></div>
+
+  <!-- ===== Xem bài làm (F / quay cóp) ===== -->
+  <aside id="paper-view" class="hidden">
+    <div class="pv-head"><b id="pv-title"></b><span id="pv-hint"></span></div>
+    <canvas id="pv-canvas" width="512" height="708"></canvas>
+  </aside>
+
+  <div id="toasts"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
