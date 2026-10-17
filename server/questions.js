@@ -81,7 +81,23 @@ const world = [
   ['Thế vận hội Olympic cổ đại bắt nguồn từ đâu?', ['Hy Lạp', 'La Mã', 'Ai Cập', 'Ba Tư'], 0, 'Olympic cổ đại diễn ra ở Olympia, Hy Lạp.'],
 ];
 
+// Chủ đề của từng câu Việt Nam (theo thứ tự trong mảng vn) — dùng cho đề thi đổi chủ đề mỗi ngày.
+const VN_TOPIC = ['tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'tet', 'lichsu', 'lichsu', 'lichsu', 'lichsu', 'lichsu',
+  'disan', 'disan', 'disan', 'disan', 'disan', 'disan', 'disan', 'disan', 'nghethuat', 'disan', 'nghethuat', 'nghethuat', 'lichsu',
+  'nghethuat', 'nghethuat', 'nghethuat', 'disan', 'disan', 'nghethuat', 'nghethuat', 'nghethuat', 'nghethuat', 'tet'];
+
 let id = 0;
-const build = (pack, rows) => rows.map(([q, options, a, exp]) => ({ id: ++id, pack, q, options, a, exp }));
+const build = (pack, rows) => rows.map(([q, options, a, exp], i) => ({ id: ++id, pack, topic: pack === 'vn' ? VN_TOPIC[i] : pack, q, options, a, exp }));
 
 export const QUESTIONS = [...build('vn', vn), ...build('asia', asia), ...build('world', world)];
+
+// Chủ đề bài thi trong lớp xoay vòng theo ngày (giờ Việt Nam)
+export const TOPICS = [
+  { id: 'tet', name: 'Lễ Tết & phong tục Việt Nam' },
+  { id: 'disan', name: 'Di sản UNESCO của Việt Nam' },
+  { id: 'lichsu', name: 'Truyền thuyết & lịch sử dựng nước' },
+  { id: 'nghethuat', name: 'Văn học & nghệ thuật dân gian' },
+  { id: 'asia', name: 'Văn hóa các nước Châu Á' },
+  { id: 'world', name: 'Văn hóa các nước trên thế giới' },
+  { id: 'mix', name: 'Tổng hợp văn hóa Việt Nam' },
+];

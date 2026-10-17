@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { ITEM_MAP, DEFAULT_EQUIPPED } from './data/items.js';
 
 const SKIN = '#f1c27d';
+const DOWN = new THREE.Vector3(0, -1, 0);
+const _v = new THREE.Vector3();
+const _q = new THREE.Quaternion();
 const HAIR = '#1b1b1b';
 const matCache = new Map();
 function mat(color, glow = false) {
@@ -169,6 +172,8 @@ export function createAvatar(look = DEFAULT_EQUIPPED, name = '') {
 
   const api = {
     group, head, body, nameTag, look: null, anim: 'idle|',
+    aim: null,                 // Vector3 thế giới: tay phải (cầm vợt) chĩa về điểm này
+    shoulderR: armR.pivot,
     setLook(lk) {
       const eq = { ...DEFAULT_EQUIPPED, ...lk };
       api.look = eq;
@@ -214,25 +219,35 @@ export function createAvatar(look = DEFAULT_EQUIPPED, name = '') {
       bubbleTimer = 5;
     },
     setAnim(a) { api.anim = a || 'idle|'; },
+    /** Trúng đòn: hiện 💢, người ngả ra sau một chút. */
+    hurt() {
+      hurtT = 0.45;
+      if (!fx.hurt) { fx.hurt = textSprite('💢', { bg: 'rgba(0,0,0,0)', font: '64px sans-serif', w: 96, h: 96, scale: 1.6 }); fx.hurt.position.set(0.25, 1.95, 0); body.add(fx.hurt); }
+      fx.hurt.visible = true;
+      fx.hurtLeft = 0.7;
+    },
     update: (dt) => update(dt),
     dispose() { group.traverse((o) => { o.geometry?.dispose(); if (o.isSprite) o.material.map?.dispose(); }); },
   };
 
-  let t = Math.random() * 10, phase = 0;
+  let t = Math.random() * 10, phase = 0, hurtT = 0, lastAction = '', actT = 0;
+  const fx = {};
   const damp = (cur, target, k) => cur + (target - cur) * k;
   function update(dt) {
     t += dt;
     const [base, action] = api.anim.split('|');
+    if (action !== lastAction) { lastAction = action; actT = 0; } else actT += dt;
     const seated = base === 'sit';
+    const air = base === 'air';                     // đang nhảy
     const moving = base === 'walk' || base === 'run';
     const k = 1 - Math.exp(-14 * dt);
     if (moving) phase += dt * (base === 'run' ? 11 : 7.5);
     const sw = moving ? Math.sin(phase) * (base === 'run' ? 0.9 : 0.6) : 0;
 
     // Chân
-    const tl = seated ? Math.PI / 2 : sw, tr = seated ? Math.PI / 2 : -sw;
-    const kl = seated ? -Math.PI / 2 : moving ? -Math.max(0, Math.sin(phase + 1.2)) * 0.9 : 0;
-    const kr = seated ? -Math.PI / 2 : moving ? -Math.max(0, Math.sin(phase + 1.2 + Math.PI)) * 0.9 : 0;
+    const tl = seated ? Math.PI / 2 : air ? 0.9 : sw, tr = seated ? Math.PI / 2 : air ? 0.35 : -sw;
+    const kl = seated ? -Math.PI / 2 : air ? -1.2 : moving ? -Math.max(0, Math.sin(phase + 1.2)) * 0.9 : 0;
+    const kr = seated ? -Math.PI / 2 : air ? -0.5 : moving ? -Math.max(0, Math.sin(phase + 1.2 + Math.PI)) * 0.9 : 0;
     legL.thigh.rotation.x = damp(legL.thigh.rotation.x, tl, k);
     legR.thigh.rotation.x = damp(legR.thigh.rotation.x, tr, k);
     legL.shin.rotation.x = damp(legL.shin.rotation.x, kl, k);
@@ -242,8 +257,15 @@ export function createAvatar(look = DEFAULT_EQUIPPED, name = '') {
     // Tay
     let aL = { x: seated ? 1.05 : -sw * 0.9, y: 0, z: seated ? 0 : -0.06 };
     let aR = { x: seated ? 1.05 : sw * 0.9, y: 0, z: seated ? 0 : 0.06 };
-    let tz = 0, tx = moving ? 0.06 : Math.sin(t * 1.6) * 0.015, hy = 0, hx = 0;
+    let tz = 0, tx = moving ? 0.06 : Math.sin(t * 1.6) * 0.015, hy = 0, hx = 0, fastArms = false;
+    if (air) { aL = { x: -0.5, y: 0, z: -0.7 }; aR = { x: -0.5, y: 0, z: 0.7 }; }
+    // Cú đấm kiểu Minecraft: tay vung ra trước rồi thu về trong ~0.28s
+    const punch = Math.sin(Math.min(1, actT / 0.28) * Math.PI);
     switch (action) {
+      case 'swingL': aL = { x: 1.65 * punch, y: 0.35 * punch, z: 0 }; fastArms = true; tz = 0.1 * punch; break;
+      case 'swingR': aR = { x: 1.65 * punch, y: -0.35 * punch, z: 0 }; fastArms = true; tz = -0.1 * punch; break;
+      case 'bonk': aR = { x: 2.3 + Math.sin(t * 14) * 0.75, y: -0.2, z: 0 }; fastArms = true; break;     // cốc đầu
+      case 'dizzy': hy = Math.sin(t * 6) * 0.45; hx = Math.cos(t * 6) * 0.2; tz = Math.sin(t * 4) * 0.12; break;
       case 'wave': aR = { x: 2.7, y: 0, z: Math.sin(t * 10) * 0.35 }; break;
       case 'raise': aR = { x: Math.PI - 0.08, y: 0, z: 0 }; break;
       case 'clap': {
@@ -256,21 +278,50 @@ export function createAvatar(look = DEFAULT_EQUIPPED, name = '') {
       case 'peekL': tz = 0.2; hy = 0.95; hx = -0.4; break;
       case 'peekR': tz = -0.2; hy = -0.95; hx = -0.4; break;
     }
+    const ka = fastArms ? 1 - Math.exp(-40 * dt) : k;
     for (const [arm, a] of [[armL, aL], [armR, aR]]) {
-      arm.pivot.rotation.x = damp(arm.pivot.rotation.x, a.x, k);
-      arm.pivot.rotation.y = damp(arm.pivot.rotation.y, a.y, k);
-      arm.pivot.rotation.z = damp(arm.pivot.rotation.z, a.z, k);
+      arm.pivot.rotation.x = damp(arm.pivot.rotation.x, a.x, ka);
+      arm.pivot.rotation.y = damp(arm.pivot.rotation.y, a.y, ka);
+      arm.pivot.rotation.z = damp(arm.pivot.rotation.z, a.z, ka);
     }
+    if (hurtT > 0) { hurtT -= dt; tx -= 0.55 * Math.max(0, hurtT) / 0.45; }
     torso.rotation.z = damp(torso.rotation.z, tz, k);
-    torso.rotation.x = damp(torso.rotation.x, tx, k);
+    torso.rotation.x = damp(torso.rotation.x, tx, hurtT > 0 ? 1 - Math.exp(-30 * dt) : k);
     head.rotation.y = damp(head.rotation.y, hy, k);
     head.rotation.x = damp(head.rotation.x, hx, k);
 
     body.position.y = damp(body.position.y, seated ? -0.37 : moving ? Math.abs(Math.sin(phase)) * 0.04 : 0, k);
+    body.scale.y = damp(body.scale.y, hurtT > 0.25 ? 0.9 : 1, 1 - Math.exp(-20 * dt));
+
+    // hiệu ứng: 💢 khi trúng đòn, sao quay khi bị cốc đầu
+    if (fx.hurt && fx.hurt.visible && (fx.hurtLeft -= dt) <= 0) fx.hurt.visible = false;
+    if (action === 'dizzy') {
+      if (!fx.stars) {
+        fx.stars = new THREE.Group();
+        for (let i = 0; i < 3; i++) {
+          const s = textSprite('⭐', { bg: 'rgba(0,0,0,0)', font: '56px sans-serif', w: 80, h: 80, scale: 0.9 });
+          s.userData.a = (i / 3) * Math.PI * 2;
+          fx.stars.add(s);
+        }
+        fx.stars.position.y = 1.9;
+        body.add(fx.stars);
+      }
+      fx.stars.visible = true;
+      for (const s of fx.stars.children) s.position.set(Math.cos(t * 5 + s.userData.a) * 0.32, Math.sin(t * 9 + s.userData.a) * 0.05, Math.sin(t * 5 + s.userData.a) * 0.32);
+    } else if (fx.stars) fx.stars.visible = false;
 
     const spin = bagSlot.children[0]?.userData.spin;
     if (spin) spin.rotation.y += dt * 1.5;
     if (bubble && (bubbleTimer -= dt) <= 0) { body.remove(bubble); bubble.material.map.dispose(); bubble = null; }
+    if (api.aim) {
+      const sp = armR.pivot;
+      sp.updateWorldMatrix(true, false);
+      _v.setFromMatrixPosition(sp.matrixWorld);
+      _v.subVectors(api.aim, _v).normalize();
+      sp.parent.getWorldQuaternion(_q);
+      _v.applyQuaternion(_q.invert());
+      sp.quaternion.setFromUnitVectors(DOWN, _v);
+    }
   }
 
   api.setLook(look);

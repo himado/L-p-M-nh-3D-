@@ -26,7 +26,7 @@ export class QuestMode {
     this.h = hooks; // { onProfile(p), onExit(), getLook() }
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 400);
-    this.build();
+    this.built = false;               // scene vượt ải chỉ dựng khi chơi lượt đầu tiên
     $('#qh-exit').onclick = () => this.exit();
     $('#qq-next').onclick = () => this.afterAnswer();
     $('#result-menu').onclick = () => { closeModal('#modal-result'); this.exit(); };
@@ -163,6 +163,7 @@ export class QuestMode {
   }
 
   async start(pack) {
+    if (!this.built) { this.build(); this.built = true; }
     this.pack = pack;
     let d;
     try { d = await api('/quest/start', { pack }); } catch (e) { toast(e.message, 'err'); return false; }

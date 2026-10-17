@@ -1,6 +1,6 @@
 # Lớp mình 3D — Lớp học ảo 3D
 
-Lớp học truyền thống 3D nhiều người chơi + vượt ải kiến thức văn hóa + cửa hàng + sự kiện.
+Lớp học truyền thống 3D nhiều người chơi + sân trường (lá bay, cầu lông đối kháng) + vượt ải kiến thức văn hóa + cửa hàng + sự kiện.
 Concept, pipeline và gợi ý tính năng nằm trong [PLAN.md](PLAN.md).
 
 ## Chạy

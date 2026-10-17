@@ -23,6 +23,7 @@ export class Exam {
       const d = await api('/exam/start', {});
       Object.assign(this, { id: d.examId, ca: d.ca, qs: d.questions, left: d.seconds, i: 0, answers: d.questions.map(() => null),
         caughtQ: new Set(), caught: 0, peekT: 0, read: false, open: true, submitted: false, mul: d.mul });
+      $('#modal-exam h2').textContent = '📝 Bài thi hôm nay: ' + (d.topic?.name || 'Văn hóa');
       openModal('#modal-exam');
       this.render();
       this.emit();

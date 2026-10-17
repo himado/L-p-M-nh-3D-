@@ -223,3 +223,77 @@ input:focus { border-color: var(--gold); }
 .pv-head span { color: var(--muted); font-size: 12px; }
 @keyframes pvIn { from { opacity: 0; transform: translateY(-50%) translateX(40px) rotate(6deg); } }
 #modal-exam.peeking .panel { transform: translateX(-30%) scale(.9); }
+
+/* ---- Cầu lông ---- */
+#bm-hud { position: fixed; top: 56px; left: 0; right: 0; margin: 0 auto; z-index: 6; display: grid; gap: 6px; justify-items: center;
+  width: min(640px, calc(100vw - 32px)); text-align: center; pointer-events: none; }
+#bm-score { background: rgba(0,0,0,.6); padding: 6px 18px; border-radius: 999px; font-size: 17px; }
+#bm-score .sc { font: 800 26px inherit; color: var(--gold); margin: 0 4px; }
+#bm-serve { font-weight: 600; text-shadow: 0 1px 4px #000; min-height: 20px; }
+#bm-shot { font: 800 18px inherit; color: #ffe066; text-shadow: 0 2px 6px #000; min-height: 24px; }
+.bm-help { background: rgba(0,0,0,.5); padding: 5px 12px; border-radius: 10px;
+  font-size: 12px; width: max-content; max-width: calc(100vw - 32px); }
+.bm-actions { position: fixed; right: 16px; bottom: 56px; display: grid; gap: 6px; pointer-events: auto; }
+#bm-msg { position: fixed; top: 34%; left: 50%; transform: translateX(-50%); z-index: 7; background: rgba(15,23,42,.85); border: 1px solid var(--line);
+  padding: 10px 20px; border-radius: 14px; font: 800 20px inherit; text-align: center; max-width: calc(100vw - 32px); pointer-events: none; animation: pop .35s ease-out; }
+body.bm-playing #game { cursor: none; }
+#bm-pause-msg { position: fixed; top: 44%; left: 50%; transform: translateX(-50%); z-index: 8; background: rgba(15,23,42,.9); border: 2px solid var(--gold);
+  padding: 14px 22px; border-radius: 14px; font: 700 18px inherit; text-align: center; max-width: calc(100vw - 32px); }
+#invite-pop { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--panel); border: 2px solid var(--gold);
+  border-radius: 16px; padding: 14px 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); animation: pop .35s ease-out; width: min(420px, calc(100vw - 32px)); }
+#invite-pop .ip-text { font-weight: 700; text-align: center; }
+#invite-pop .row { margin-top: 10px; }
+.online-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px;
+  background: rgba(255,255,255,.04); }
+.online-row .grow { flex: 1; }
+.online-row small { color: var(--muted); }
+.online-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+/* ---- Người chơi online ---- */
+.online-sec { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--muted); margin: 12px 0 6px; }
+.online-row .acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.online-row.off { opacity: .5; }
+.online-row .fr { color: var(--gold); }
+.online-dot.off { background: #64748b; box-shadow: none; }
+
+/* ---- Câu hỏi của học sinh ---- */
+#qm-opts { display: grid; gap: 8px; margin-top: 10px; }
+.qm-opt { display: flex; gap: 8px; align-items: center; }
+.qm-opt button { width: 40px; flex: none; }
+.qm-opt button.on { background: var(--green); color: #052e16; }
+.qm-opt input { flex: 1; }
+#quiz-pop { position: fixed; right: 16px; top: 64px; z-index: 55; width: min(380px, calc(100vw - 32px)); background: var(--panel);
+  border: 2px solid var(--gold); border-radius: 16px; padding: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.5); animation: pop .35s ease-out; }
+.qp-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-right: 28px; }
+#qp-timer { color: var(--gold); font-weight: 800; }
+#qp-q { font-weight: 700; font-size: 16px; margin-top: 8px; }
+#qp-close { position: absolute; top: 8px; right: 8px; }
+
+/* ---- Trao đổi ---- */
+.trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.trade-cols h3 { margin: 0 0 8px; }
+.trade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; max-height: 40vh; overflow: auto; margin-bottom: 8px; min-height: 60px; }
+.trade-item { border: 1px solid var(--line); border-radius: 10px; padding: 8px 4px; text-align: center; cursor: pointer; font-size: 12px; background: rgba(255,255,255,.04);
+  color: var(--text); font-family: inherit; }
+.trade-item.on { border-color: var(--gold); background: rgba(242,193,78,.18); }
+.trade-item i { display: block; font-style: normal; font-size: 24px; }
+
+/* ---- Oẳn tù tì ---- */
+#rps-pop { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 58; background: var(--panel); border: 2px solid var(--gold);
+  border-radius: 18px; padding: 18px; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: pop .35s ease-out; width: min(420px, calc(100vw - 32px)); }
+#rps-title { font: 800 18px inherit; margin-bottom: 12px; }
+.rps-row { display: flex; gap: 10px; justify-content: center; }
+.rps-row button { font-size: 44px; width: 96px; padding: 10px 0; border-radius: 14px; border: 2px solid var(--line); background: rgba(255,255,255,.06); cursor: pointer; color: var(--text); }
+.rps-row button span { display: block; font: 600 13px 'Be Vietnam Pro', sans-serif; }
+.rps-row button.on { border-color: var(--gold); background: rgba(242,193,78,.2); }
+@media (max-width: 760px) { .trade-cols { grid-template-columns: 1fr; } }
+
+/* ---- Không render 3D ở sảnh / đăng nhập: thay bằng nền tĩnh ---- */
+body.no3d #game { visibility: hidden; }
+body.no3d { background:
+  radial-gradient(ellipse at 15% 0%, rgba(255,183,213,.45), transparent 45%),
+  radial-gradient(ellipse at 85% 10%, rgba(165,180,252,.35), transparent 50%),
+  radial-gradient(ellipse at 50% 100%, rgba(255,214,231,.18), transparent 55%),
+  linear-gradient(180deg, #1e1b3a 0%, #0f172a 100%); }
+body.no3d #menu { background: transparent; }
+#daynight { position: fixed; right: 96px; bottom: 12px; z-index: 6; }

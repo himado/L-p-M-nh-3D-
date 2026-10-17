@@ -14,6 +14,8 @@ export const SLOTS = {
   bag: 'Ba lô',
   chalk: 'Phấn viết',
   course: 'Khóa học',
+  tool: 'Dụng cụ',
+  collect: 'Sưu tầm',
 };
 
 export const ITEMS = [
@@ -62,6 +64,12 @@ export const ITEMS = [
   { id: 'chalk_blue', type: 'chalk', name: 'Phấn xanh', price: 80, rarity: 'common', icon: '🔵', desc: '', color: '#7dd3fc' },
   { id: 'chalk_rainbow', type: 'chalk', name: 'Phấn cầu vồng', price: 15, currency: 'gems', rarity: 'legendary', icon: '🌈', desc: 'Nét phấn đổi màu theo từng nét.', color: 'rainbow' },
 
+  // ---- Dụng cụ & vật phẩm sưu tầm ----
+  { id: 'tool_quizchalk', type: 'tool', name: 'Phấn Ra Đề', price: 500, rarity: 'epic', icon: '🪄',
+    desc: 'Viên phấn thần của thầy đồ: cầm lên bảng để ra MỘT câu hỏi cho cả trường (dùng 1 lần). Ai trả lời đúng nhận Hoa Điểm 10.' },
+  { id: 'collect_flower10', type: 'collect', name: 'Hoa Điểm 10', price: 0, rarity: 'rare', icon: '🌸', hidden: true,
+    desc: 'Phần thưởng khi trả lời đúng câu hỏi của bạn bè. Tích lũy để khoe hoặc đem trao đổi.' },
+
   // ---- Khóa học (mở gói câu hỏi) ----
   { id: 'course_vn', type: 'course', name: 'Văn hóa Việt Nam', price: 0, rarity: 'common', icon: '🇻🇳', desc: 'Gói câu hỏi mặc định.', pack: 'vn' },
   { id: 'course_asia', type: 'course', name: 'Văn hóa Châu Á', price: 800, rarity: 'rare', icon: '🏮', desc: 'Nhật, Hàn, Ấn, Thái, Lào, Campuchia...', pack: 'asia' },
@@ -78,3 +86,7 @@ export const PACKS = {
   asia: { name: 'Châu Á', icon: '🏮', item: 'course_asia' },
   world: { name: 'Thế giới', icon: '🌍', item: 'course_world' },
 };
+
+/** Món được phép trao đổi giữa người chơi: đồ mua được (trừ khóa học và đồ mặc định). Hoa Điểm 10 đổi theo số lượng. */
+export const isTradeable = (it) => !!it && !it.hidden && it.price > 0 && it.type !== 'course';
+export const FLOWER = 'collect_flower10';

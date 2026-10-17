@@ -11,6 +11,8 @@ export class Board {
     this.texture = texture;
     this.strokes = [];
     this.active = false;
+    this.topic = 'Văn hóa truyền thống Việt Nam';
+    this.quiz = null;
     this.ray = new THREE.Raycaster();
     this.redraw([]);
     document.fonts?.ready.then(() => this.redraw(this.strokes));
@@ -31,9 +33,36 @@ export class Board {
     ctx.font = '600 40px "Be Vietnam Pro", sans-serif'; ctx.textAlign = 'right';
     ctx.fillText(`${WEEKDAYS[d.getDay()]}, ngày ${d.getDate()} tháng ${d.getMonth() + 1} năm ${d.getFullYear()}`, w - 50, 34);
     ctx.textAlign = 'center'; ctx.font = '800 64px "Be Vietnam Pro", sans-serif'; ctx.fillStyle = '#fde68a';
-    ctx.fillText('Bài học: Văn hóa truyền thống Việt Nam', w / 2, 110);
+    ctx.fillText('Bài học hôm nay: ' + this.topic, w / 2, 110, w - 100);
     ctx.globalAlpha = 1;
+    if (this.quiz) this.drawQuiz();
   }
+
+  /** Câu hỏi do học sinh ra (cần Phấn Ra Đề) — hiện to giữa bảng cho cả lớp. */
+  drawQuiz() {
+    const { ctx } = this;
+    const { width: w } = this.canvas;
+    const q = this.quiz;
+    ctx.save();
+    ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.setLineDash([18, 12]);
+    ctx.strokeRect(120, 200, w - 240, 520);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#fde047'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = '700 46px "Be Vietnam Pro", sans-serif';
+    ctx.fillText('❓ Câu hỏi của ' + q.by, w / 2, 222);
+    ctx.fillStyle = '#f8fafc'; ctx.font = '600 54px "Be Vietnam Pro", sans-serif';
+    ctx.fillText(q.q, w / 2, 300, w - 300);
+    ctx.font = '500 44px "Be Vietnam Pro", sans-serif'; ctx.textAlign = 'left';
+    q.options.forEach((o, i) => {
+      const x = i % 2 ? w / 2 + 40 : 200, y = 420 + Math.floor(i / 2) * 110;
+      ctx.fillStyle = q.answer === i ? '#86efac' : '#f8fafc';
+      ctx.fillText('ABCD'[i] + '. ' + o, x, y, w / 2 - 260);
+    });
+    ctx.restore();
+  }
+
+  setTopic(name) { if (name && name !== this.topic) { this.topic = name; this.redraw(this.strokes); } }
+  setQuiz(q) { this.quiz = q; this.redraw(this.strokes); }
 
   drawStroke(s) {
     const { ctx } = this;

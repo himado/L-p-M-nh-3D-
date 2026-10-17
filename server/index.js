@@ -5,9 +5,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { ITEMS, ITEM_MAP, DEFAULT_OWNED, DEFAULT_EQUIPPED, PACKS } from '../public/js/data/items.js';
+import { ITEMS, ITEM_MAP, DEFAULT_OWNED, DEFAULT_EQUIPPED, PACKS, isTradeable, FLOWER } from '../public/js/data/items.js';
 import { activeEvent } from '../public/js/data/events.js';
-import { QUESTIONS } from './questions.js';
+import { BM, rallyWinner, gameOver } from '../public/js/data/court.js';
+import { QUESTIONS, TOPICS } from './questions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -18,6 +19,7 @@ const SEAT_COUNT = 30;
 // ===================== Lưu trữ (JSON file — thay bằng PostgreSQL khi lên production) =====================
 let db = { users: {}, sessions: {} };
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* lần chạy đầu */ }
+for (const u of Object.values(db.users)) { u.bag ||= {}; u.friends ||= []; }   // nâng cấp dữ liệu cũ
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
@@ -42,7 +44,7 @@ function newUser(name, password) {
     name, salt, hash: hashPw(password, salt), coins: 300, gems: 3, xp: 0,
     owned: [...DEFAULT_OWNED], equipped: { ...DEFAULT_EQUIPPED },
     stats: { correct: 0, answered: 0, runs: 0, exams: 0, perfect: 0 },
-    daily: null, login: { last: null, streak: 0 }, created: Date.now(),
+    daily: null, login: { last: null, streak: 0 }, created: Date.now(), bag: {}, friends: [],
   };
 }
 
@@ -78,7 +80,7 @@ function profile(u) {
     owned: u.owned, equipped: u.equipped, stats: u.stats,
     packs: Object.keys(PACKS).filter((p) => u.owned.includes(PACKS[p].item)),
     missions: MISSIONS.map((m) => ({ ...m, progress: Math.min(dl[m.key], m.goal), claimed: dl.claimed.includes(m.id) })),
-    login: loginState(u), event: activeEvent(today()),
+    login: loginState(u), event: activeEvent(today()), bag: u.bag, topic: topicOf(today()),
   };
 }
 
@@ -117,15 +119,22 @@ function getRun(u, id, kind) {
 }
 const publicQ = (q) => ({ q: q.q, options: q.options, pack: q.pack });
 
+// Chủ đề bài thi đổi mỗi ngày (xoay vòng 7 chủ đề)
+function topicOf(dateKey) { return TOPICS[Math.floor(Date.parse(dateKey) / 86400000) % TOPICS.length]; }
+
 // Ca thi chung: cả lớp trong cùng 10 phút nhận cùng đề, cùng thứ tự đáp án → nhìn bài nhau mới có nghĩa.
 const EXAM_SLOT = 600e3;
 const examCache = new Map();
 function examSet(ca = Math.floor(Date.now() / EXAM_SLOT)) {
   if (!examCache.has(ca)) {
     const rnd = seeded(ca * 7919 + 13);
-    const pool = QUESTIONS.filter((q) => q.pack === 'vn');
+    const topic = topicOf(new Date(ca * EXAM_SLOT).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    // ưu tiên câu thuộc chủ đề hôm nay, thiếu thì bù bằng câu Việt Nam khác
+    const main = QUESTIONS.filter((q) => (topic.id === 'mix' ? q.pack === 'vn' : q.topic === topic.id));
+    const rest = QUESTIONS.filter((q) => q.pack === 'vn' && !main.includes(q));
     const qs = [];
     while (qs.length < 10) {
+      const pool = main.length ? main : rest;
       const q = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
       const order = [0, 1, 2, 3];
       for (let i = 3; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
@@ -239,7 +248,7 @@ const routes = {
   'POST /api/equip': ({ user, body }) => {
     const u = need(user);
     const it = ITEM_MAP[body.id];
-    if (!it || !u.owned.includes(it.id) || it.type === 'course') fail('Không thể trang bị');
+    if (!it || !u.owned.includes(it.id) || ['course', 'tool', 'collect'].includes(it.type)) fail('Không thể trang bị');
     u.equipped[it.type] = it.id;
     save();
     return { profile: profile(u) };
@@ -295,7 +304,7 @@ const routes = {
     const u = need(user);
     const { ca, qs } = examSet();
     const run = newRun(u, 'exam', null, 10, qs);
-    return { examId: run.id, ca, questions: run.qs.map(publicQ), seconds: 360, mul: coinMul() };
+    return { examId: run.id, ca, topic: topicOf(today()), questions: run.qs.map(publicQ), seconds: 360, mul: coinMul() };
   },
   // Tờ bài làm của các bạn ảo trong ca thi hiện tại (để hiển thị trên bàn / khi quay cóp).
   'GET /api/papers/npc': ({ user, url }) => {
@@ -380,7 +389,7 @@ function broadcast(msg, except) {
 }
 const broadcastSeats = () => broadcast({ t: 'seats', seats: room.seats });
 const num = (v, lim = 50) => Math.max(-lim, Math.min(lim, Number(v) || 0));
-const vec = (p) => (Array.isArray(p) ? [num(p[0]), 0, num(p[2])] : [0, 0, 0]);
+const vec = (p) => (Array.isArray(p) ? [num(p[0]), Math.max(0, Math.min(3, Number(p[1]) || 0)), num(p[2])] : [0, 0, 0]);   // y: nhảy
 
 function freeSeat(id) { room.seats = room.seats.map((s) => (s === id ? null : s)); }
 function takeSeat(id, seat) {
@@ -390,32 +399,407 @@ function takeSeat(id, seat) {
   room.seats[seat] = id;
   return seat;
 }
-function leave(ws) {
+function leave(ws, reason = 'left') {
   if (!room.players.has(ws.pid)) return;
   room.players.delete(ws.pid);
   freeSeat(ws.pid);
+  bmLeave(ws.pid, reason);
   broadcast({ t: 'leave', id: ws.pid });
   broadcastSeats();
+}
+
+// ===================== Cầu lông: nhiều trận song song trên "một" sân =====================
+// Ai vào sân cũng có phiên riêng (đấu với máy). Muốn đánh với người thật thì mời — người nhận lời vào chung phiên.
+// Mọi người chỉ thấy một sân; mỗi máy chỉ hiển thị người chơi của trận mình (hoặc trận nổi bật nếu đang đứng xem).
+const matches = new Map();
+const invites = new Map();          // `${mid}:${pid người được mời}` → hạn
+let nextMid = 1;
+const PAUSE_MAX = 120e3;
+const vec3 = (p) => (Array.isArray(p) && p.length === 3 ? p.map((n) => num(n, 60)) : null);
+const otherSide = (s) => (s === 'A' ? 'B' : 'A');
+
+function newMatch() {
+  const m = { id: nextMid++, A: null, B: null, names: { A: '', B: '' }, score: { A: 0, B: 0 }, serving: 'A', rally: 0, lastHitter: null, over: null, paused: null };
+  matches.set(m.id, m);
+  return m;
+}
+const matchPublic = (m) => ({ id: m.id, A: m.A, B: m.B, names: m.names, score: m.score, serving: m.serving, rally: m.rally, over: m.over,
+  paused: m.paused && { side: m.paused.side, name: m.paused.name, until: m.paused.until } });
+const broadcastBm = () => broadcast({ t: 'bm', matches: [...matches.values()].map(matchPublic) });
+function matchOf(pid) { for (const m of matches.values()) if (m.A === pid || m.B === pid) return m; return null; }
+const sideIn = (m, pid) => (m.A === pid ? 'A' : m.B === pid ? 'B' : null);
+function resetMatch(m) { clearTimeout(m.pauseTimer); Object.assign(m, { score: { A: 0, B: 0 }, over: null, lastHitter: null, paused: null }); m.rally++; }
+function sockOf(pid) { for (const o of sockets) if (o.pid === pid) return o; return null; }
+function notice(pid, text, kind = 'info') { const o = pid != null && sockOf(pid); if (o) send(o, { t: 'bm_notice', text, kind }); }
+
+function bmLeave(pid, reason = 'left') {
+  const m = matchOf(pid);
+  if (!m) return;
+  const side = sideIn(m, pid);
+  const name = m.names[side];
+  const midGame = m.A && m.B && !m.over && (m.score.A + m.score.B > 0 || m.lastHitter);
+  m[side] = null;
+  m.names[side] = '';
+  const other = m[otherSide(side)];
+  if (other != null) {
+    notice(other, reason === 'disconnect' ? `📴 ${name} mất kết nối — trận kết thúc, bạn tiếp tục đấu với máy`
+      : reason === 'timeout' ? `⌛ ${name} tạm dừng quá 2 phút — trận kết thúc`
+      : `🚪 ${name} đã rời trận${midGame ? ' khi chưa hết ván' : ''} — bạn tiếp tục đấu với máy`, 'gold');
+  }
+  if (m.A == null && m.B == null) { clearTimeout(m.pauseTimer); matches.delete(m.id); } else resetMatch(m);
+  broadcastBm();
+}
+
+function handleBadminton(ws, pl, u, msg) {
+  const m = pl && matchOf(pl.id);
+  const side = m && sideIn(m, pl.id);
+  const opp = m && m[otherSide(side)];
+  switch (msg.t) {
+    case 'bm_join': {                      // vào sân → phiên riêng
+      if (!pl || pl.zone !== 'yard') return;
+      bmLeave(pl.id);
+      const nm = newMatch();
+      const s = msg.side === 'B' ? 'B' : 'A';
+      nm[s] = pl.id; nm.names[s] = pl.name; nm.serving = s;
+      broadcastBm();
+      break;
+    }
+    case 'bm_leave': if (pl) bmLeave(pl.id); break;
+    case 'bm_invite': {
+      const to = sockOf(Number(msg.to));
+      if (!m) return notice(ws.pid, 'Hãy vào sân cầu lông trước khi mời bạn', 'err');
+      if (m.A != null && m.B != null) return notice(ws.pid, 'Trận đã đủ 2 người', 'err');
+      if (!to || to.pid === ws.pid) return notice(ws.pid, 'Người này không còn online', 'err');
+      if (Date.now() - (ws.lastInvite || 0) < 2000) return;
+      ws.lastInvite = Date.now();
+      invites.set(`${m.id}:${to.pid}`, Date.now() + 60e3);
+      send(to, { t: 'bm_invite', mid: m.id, from: ws.pid, fromName: u.name });
+      notice(ws.pid, `📨 Đã gửi lời mời tới ${to.user.name}`, 'ok');
+      break;
+    }
+    case 'bm_accept': {                    // người nhận lời phải đã vào sân trường (client tự đưa ra sân trước)
+      const key = `${msg.mid}:${ws.pid}`;
+      const exp = invites.get(key);
+      invites.delete(key);
+      const target = matches.get(msg.mid);
+      if (!exp || exp < Date.now() || !target) return notice(ws.pid, 'Lời mời đã hết hạn', 'err');
+      if (!pl || pl.zone !== 'yard') return;
+      if (m && m !== target) bmLeave(pl.id);
+      const free = target.A == null ? 'A' : target.B == null ? 'B' : null;
+      if (!free) return notice(ws.pid, 'Trận đã đủ người', 'err');
+      target[free] = pl.id; target.names[free] = pl.name;
+      resetMatch(target);
+      target.serving = otherSide(free);    // chủ phòng giao trước
+      notice(target[otherSide(free)], `✅ ${pl.name} đã nhận lời — vào trận!`, 'ok');
+      broadcastBm();
+      break;
+    }
+    case 'bm_decline': {
+      invites.delete(`${msg.mid}:${ws.pid}`);
+      const target = matches.get(msg.mid);
+      if (target) for (const s of ['A', 'B']) notice(target[s], `🙅 ${u.name} đã từ chối lời mời`, 'err');
+      break;
+    }
+    case 'bm_pause': {                     // tạm dừng khi chưa hết ván, tối đa 2 phút
+      if (!m || m.A == null || m.B == null || m.over || m.paused) return;
+      m.paused = { side, name: pl.name, until: Date.now() + PAUSE_MAX };
+      const pid = pl.id;
+      m.pauseTimer = setTimeout(() => { if (m.paused?.side === side && m[side] === pid) bmLeave(pid, 'timeout'); }, PAUSE_MAX);
+      notice(opp, `⏸ ${pl.name} xin tạm dừng trận (tối đa 2 phút)`, 'gold');
+      broadcastBm();
+      break;
+    }
+    case 'bm_resume': {
+      if (!m?.paused || m.paused.side !== side) return;
+      clearTimeout(m.pauseTimer);
+      m.paused = null;
+      m.lastHitter = null;
+      m.rally++;                           // đánh lại điểm đang dở
+      notice(opp, `▶️ ${pl.name} đã quay lại — tiếp tục trận!`, 'ok');
+      broadcastBm();
+      break;
+    }
+    case 'bm_hit': {
+      if (!m || m.A == null || m.B == null || msg.rally !== m.rally || m.over || m.paused) return;
+      const p = vec3(msg.p), v = vec3(msg.v);
+      if (!p || !v || Math.hypot(...v) > 40) return;
+      m.lastHitter = side;
+      broadcast({ t: 'bm_hit', mid: m.id, side, p, v, rally: m.rally, type: String(msg.type || '').slice(0, 8) }, ws);
+      break;
+    }
+    case 'bm_land': {
+      if (!m || m.A == null || m.B == null || msg.rally !== m.rally || !m.lastHitter || m.over || m.paused) return;
+      const { winner } = rallyWinner(m.lastHitter, num(msg.x, 60), num(msg.z, 60));
+      m.score[winner]++;
+      m.serving = winner;
+      m.lastHitter = null;
+      m.rally++;
+      m.over = gameOver(m.score);
+      if (m.over) {
+        const w = sockOf(m[m.over])?.user;
+        if (w) { w.coins += BM.winCoins; w.xp += 20; save(); }
+        const rally = m.rally;
+        setTimeout(() => { if (matches.get(m.id) === m && m.rally === rally) { resetMatch(m); broadcastBm(); } }, 6000);
+      }
+      broadcastBm();
+      break;
+    }
+  }
+}
+
+// ===================== Xã hội: bạn bè, ra câu hỏi, trao đổi đồ, oẳn tù tì, đánh nhau kiểu Minecraft =====================
+const userKey = (u) => u.name.toLowerCase();
+const sockOfUser = (u) => [...sockets].find((o) => o.user === u && o.readyState === 1) || null;
+function pushProfile(u) { const o = sockOfUser(u); if (o) send(o, { t: 'profile', profile: profile(u) }); }
+function friendList(u) {
+  return (u.friends || []).map((k) => db.users[k]).filter(Boolean)
+    .map((f) => { const o = sockOfUser(f); return { name: f.name, online: !!o, id: o?.pid ?? null, level: level(f.xp) }; });
+}
+function pushFriends(u) { const o = sockOfUser(u); if (o) send(o, { t: 'friends', friends: friendList(u) }); }
+const friendReqs = new Map();   // `${từ}>${tới}` (key user) → hạn
+
+// ---- Câu hỏi trên bảng (cần Phấn Ra Đề) ----
+let quiz = null;                // { id, byPid, byUser, q, options, answer, endsAt, answered: Set, winners: [] }
+let nextQuiz = 1;
+const QUIZ_TIME = 40e3;
+function endQuiz() {
+  if (!quiz) return;
+  const q = quiz;
+  quiz = null;
+  if (q.winners.length) { q.byUser.coins += 5 * q.winners.length; save(); pushProfile(q.byUser); }
+  broadcast({ t: 'quiz_end', id: q.id, by: q.byUser.name, answer: q.answer, options: q.options, winners: q.winners });
+}
+
+// ---- Trao đổi đồ ----
+const trades = new Map();       // id → { id, a: user, b: user, give: {items, flowers}, want: {items, flowers}, exp }
+let nextTrade = 1;
+function tradeableOf(u) {
+  return u.owned.filter((id) => isTradeable(ITEM_MAP[id]));
+}
+function cleanOffer(o) {
+  return {
+    items: [...new Set((Array.isArray(o?.items) ? o.items : []).map(String))].slice(0, 12),
+    flowers: Math.max(0, Math.min(999, Math.floor(Number(o?.flowers) || 0))),
+  };
+}
+function hasOffer(u, o) { return o.items.every((id) => u.owned.includes(id) && isTradeable(ITEM_MAP[id])) && (u.bag?.[FLOWER] || 0) >= o.flowers; }
+function moveOffer(from, to, o) {
+  for (const id of o.items) {
+    from.owned = from.owned.filter((x) => x !== id);
+    const it = ITEM_MAP[id];
+    if (from.equipped[it.type] === id) from.equipped[it.type] = DEFAULT_EQUIPPED[it.type];
+    if (!to.owned.includes(id)) to.owned.push(id);
+  }
+  from.bag[FLOWER] = (from.bag[FLOWER] || 0) - o.flowers;
+  to.bag[FLOWER] = (to.bag[FLOWER] || 0) + o.flowers;
+}
+const offerText = (o) => [...o.items.map((id) => `${ITEM_MAP[id].icon} ${ITEM_MAP[id].name}`), o.flowers ? `🌸 ${o.flowers} Hoa Điểm 10` : ''].filter(Boolean).join(', ') || '(không có gì)';
+
+// ---- Oẳn tù tì ----
+const rpsGames = new Map();     // id → { id, a: pid, b: pid, picks: {}, timer }
+let nextRps = 1;
+const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+function finishRps(g) {
+  rpsGames.delete(g.id);
+  clearTimeout(g.timer);
+  const pa = g.picks[g.a], pb = g.picks[g.b];
+  let winner = null;
+  if (pa && !pb) winner = g.a; else if (pb && !pa) winner = g.b;
+  else if (pa && pb && pa !== pb) winner = BEATS[pa] === pb ? g.a : g.b;
+  const name = (pid) => sockOf(pid)?.user.name || '?';
+  broadcast({ t: 'rps_result', id: g.id, a: g.a, b: g.b, aName: name(g.a), bName: name(g.b), picks: { a: pa || null, b: pb || null }, winner });
+}
+
+function handleSocial(ws, pl, u, m) {
+  const target = m.to != null ? sockOf(Number(m.to)) : null;
+  switch (m.t) {
+    // ----- bạn bè -----
+    case 'friend_req': {
+      if (!target || target === ws) return;
+      const tu = target.user;
+      if ((u.friends || []).includes(userKey(tu))) return notice(ws.pid, `${tu.name} đã là bạn của bạn`, 'info');
+      friendReqs.set(`${userKey(u)}>${userKey(tu)}`, Date.now() + 120e3);
+      send(target, { t: 'friend_req', from: ws.pid, fromName: u.name });
+      notice(ws.pid, `💌 Đã gửi lời mời kết bạn tới ${tu.name}`, 'ok');
+      break;
+    }
+    case 'friend_accept': {
+      const from = sockOf(Number(m.from));
+      if (!from) return notice(ws.pid, 'Người gửi đã offline', 'err');
+      const key = `${userKey(from.user)}>${userKey(u)}`;
+      if (!(friendReqs.get(key) > Date.now())) return notice(ws.pid, 'Lời mời kết bạn đã hết hạn', 'err');
+      friendReqs.delete(key);
+      for (const [x, y] of [[u, from.user], [from.user, u]]) { x.friends ||= []; if (!x.friends.includes(userKey(y))) x.friends.push(userKey(y)); }
+      save();
+      pushFriends(u); pushFriends(from.user);
+      notice(from.pid, `🤝 ${u.name} đã đồng ý kết bạn!`, 'ok');
+      notice(ws.pid, `🤝 Bạn và ${from.user.name} đã là bạn bè`, 'ok');
+      break;
+    }
+    case 'friend_decline': { const from = sockOf(Number(m.from)); if (from) notice(from.pid, `${u.name} chưa đồng ý kết bạn`, 'info'); break; }
+    case 'friend_remove': {
+      const key = String(m.name || '').toLowerCase();
+      const f = db.users[key];
+      u.friends = (u.friends || []).filter((k) => k !== key);
+      if (f) f.friends = (f.friends || []).filter((k) => k !== userKey(u));
+      save();
+      pushFriends(u); if (f) pushFriends(f);
+      break;
+    }
+
+    // ----- ra câu hỏi trên bảng -----
+    case 'quiz_create': {
+      if (!pl || pl.zone !== 'class') return notice(ws.pid, 'Hãy lên bảng trong lớp học để ra câu hỏi', 'err');
+      if (!u.owned.includes('tool_quizchalk')) return notice(ws.pid, 'Bạn cần 🪄 Phấn Ra Đề (mua ở Cửa hàng) để ra câu hỏi', 'err');
+      if (quiz) return notice(ws.pid, 'Đang có một câu hỏi khác, chờ chút nhé', 'err');
+      if (Date.now() - (u.lastQuiz || 0) < 60e3) return notice(ws.pid, 'Mỗi phút chỉ được ra 1 câu hỏi', 'err');
+      const q = String(m.q || '').trim().slice(0, 160);
+      const options = (Array.isArray(m.options) ? m.options : []).slice(0, 4).map((o) => String(o || '').trim().slice(0, 60));
+      const answer = Number(m.answer);
+      if (q.length < 5 || options.length !== 4 || options.some((o) => !o) || !(answer >= 0 && answer < 4)) return notice(ws.pid, 'Câu hỏi cần nội dung và đủ 4 đáp án', 'err');
+      u.lastQuiz = Date.now();
+      // Phấn Ra Đề dùng 1 lần: ra đề xong là hết, muốn ra tiếp phải mua lại
+      u.owned = u.owned.filter((id) => id !== 'tool_quizchalk');
+      save();
+      pushProfile(u);
+      notice(ws.pid, '🪄 Đã dùng Phấn Ra Đề — mua viên mới ở Cửa hàng nếu muốn ra đề tiếp', 'info');
+      quiz = { id: nextQuiz++, byPid: ws.pid, byUser: u, q, options, answer, endsAt: Date.now() + QUIZ_TIME, answered: new Set([userKey(u)]), winners: [] };
+      quiz.timer = setTimeout(endQuiz, QUIZ_TIME);
+      broadcast({ t: 'quiz', id: quiz.id, by: u.name, byPid: ws.pid, q, options, endsAt: quiz.endsAt });
+      break;
+    }
+    case 'quiz_answer': {
+      if (!quiz || m.id !== quiz.id || quiz.answered.has(userKey(u))) return;
+      quiz.answered.add(userKey(u));
+      const correct = Number(m.choice) === quiz.answer;
+      if (correct) {
+        u.bag[FLOWER] = (u.bag[FLOWER] || 0) + 1;
+        u.coins += 10;
+        save();
+        quiz.winners.push(u.name);
+        pushProfile(u);
+      }
+      send(ws, { t: 'quiz_result', id: quiz.id, correct, answer: quiz.answer });
+      break;
+    }
+
+    // ----- trao đổi đồ -----
+    case 'trade_inv': {               // xem đồ có thể đổi của người kia
+      if (!target) return;
+      send(ws, { t: 'trade_inv', id: target.pid, name: target.user.name, items: tradeableOf(target.user), flowers: target.user.bag?.[FLOWER] || 0 });
+      break;
+    }
+    case 'trade_req': {
+      if (!target || target === ws) return;
+      const give = cleanOffer(m.give), want = cleanOffer(m.want);
+      if (!give.items.length && !give.flowers && !want.items.length && !want.flowers) return notice(ws.pid, 'Hãy chọn ít nhất một món', 'err');
+      if (!hasOffer(u, give)) return notice(ws.pid, 'Bạn không còn đủ đồ để đưa', 'err');
+      if (!hasOffer(target.user, want)) return notice(ws.pid, `${target.user.name} không còn món bạn muốn`, 'err');
+      const tr = { id: nextTrade++, a: u, b: target.user, give, want, exp: Date.now() + 60e3 };
+      trades.set(tr.id, tr);
+      send(target, { t: 'trade_req', id: tr.id, from: ws.pid, fromName: u.name, giveText: offerText(give), wantText: offerText(want) });
+      notice(ws.pid, `🔁 Đã gửi đề nghị trao đổi tới ${target.user.name}`, 'ok');
+      break;
+    }
+    case 'trade_accept': {
+      const tr = trades.get(Number(m.id));
+      trades.delete(Number(m.id));
+      if (!tr || tr.b !== u || tr.exp < Date.now()) return notice(ws.pid, 'Đề nghị trao đổi đã hết hạn', 'err');
+      if (!hasOffer(tr.a, tr.give) || !hasOffer(tr.b, tr.want)) return notice(ws.pid, 'Một bên không còn đủ đồ — huỷ trao đổi', 'err');
+      moveOffer(tr.a, tr.b, tr.give);   // đổi cùng lúc cho cả hai (không có trạng thái nửa vời)
+      moveOffer(tr.b, tr.a, tr.want);
+      save();
+      pushProfile(tr.a); pushProfile(tr.b);
+      for (const x of [tr.a, tr.b]) { const o = sockOfUser(x); if (o) notice(o.pid, `✅ Trao đổi thành công giữa ${tr.a.name} và ${tr.b.name}!`, 'ok'); }
+      for (const x of [tr.a, tr.b]) { const o = sockOfUser(x); const p = o && room.players.get(o.pid); if (p) { p.look = x.equipped; broadcast({ t: 'look', id: p.id, look: p.look }); } }
+      break;
+    }
+    case 'trade_decline': {
+      const tr = trades.get(Number(m.id));
+      trades.delete(Number(m.id));
+      if (tr) { const o = sockOfUser(tr.a); if (o) notice(o.pid, `🙅 ${u.name} từ chối trao đổi`, 'err'); }
+      break;
+    }
+
+    // ----- oẳn tù tì -----
+    case 'rps_challenge': {
+      if (!target || target === ws) return;
+      if ([...rpsGames.values()].some((g) => [g.a, g.b].includes(ws.pid))) return;
+      const g = { id: nextRps++, a: ws.pid, b: target.pid, picks: {}, accepted: false };
+      rpsGames.set(g.id, g);
+      g.timer = setTimeout(() => { if (!g.accepted) { rpsGames.delete(g.id); notice(ws.pid, `${target.user.name} không phản hồi`, 'info'); } }, 30e3);
+      send(target, { t: 'rps_challenge', id: g.id, from: ws.pid, fromName: u.name });
+      notice(ws.pid, `✊ Đã thách ${target.user.name} oẳn tù tì!`, 'ok');
+      break;
+    }
+    case 'rps_accept': {
+      const g = rpsGames.get(Number(m.id));
+      if (!g || g.b !== ws.pid || g.accepted) return;
+      g.accepted = true;
+      clearTimeout(g.timer);
+      g.timer = setTimeout(() => finishRps(g), 12e3);
+      for (const pid of [g.a, g.b]) { const o = sockOf(pid); if (o) send(o, { t: 'rps_start', id: g.id, vs: sockOf(pid === g.a ? g.b : g.a)?.user.name }); }
+      break;
+    }
+    case 'rps_decline': {
+      const g = rpsGames.get(Number(m.id));
+      if (g && g.b === ws.pid) { rpsGames.delete(g.id); clearTimeout(g.timer); notice(g.a, `${u.name} từ chối oẳn tù tì`, 'info'); }
+      break;
+    }
+    case 'rps_pick': {
+      const g = rpsGames.get(Number(m.id));
+      if (!g || !g.accepted || ![g.a, g.b].includes(ws.pid) || !BEATS[m.pick]) return;
+      g.picks[ws.pid] = m.pick;
+      if (g.picks[g.a] && g.picks[g.b]) finishRps(g);
+      break;
+    }
+
+    // ----- đấm kiểu Minecraft: đẩy lùi người bị trúng -----
+    case 'hit': {
+      if (!pl) return;
+      const tp = room.players.get(Number(m.target));
+      if (!tp || tp.zone !== pl.zone || Date.now() - (ws.lastHit || 0) < 250) return;
+      if (Math.hypot(tp.p[0] - pl.p[0], tp.p[2] - pl.p[2]) > 3) return;
+      ws.lastHit = Date.now();
+      const dx = tp.p[0] - pl.p[0], dz = tp.p[2] - pl.p[2], d = Math.hypot(dx, dz) || 1;
+      const victim = sockOf(tp.id);
+      if (victim) send(victim, { t: 'hit', from: pl.id, dir: [dx / d, dz / d] });
+      broadcast({ t: 'hurt', id: tp.id, by: pl.id });
+      break;
+    }
+  }
 }
 
 function handle(ws, m) {
   const pl = room.players.get(ws.pid);
   const u = ws.user;
+  if (m.t?.startsWith('bm_')) return handleBadminton(ws, pl, u, m);
+  if (/^(friend_|quiz_|trade_|rps_|hit$)/.test(m.t || '')) return handleSocial(ws, pl, u, m);
   switch (m.t) {
     case 'join': {
       if (pl) return;
-      const seat = takeSeat(ws.pid, m.seat);
-      const p = { id: ws.pid, name: u.name, look: u.equipped, p: vec(m.p), r: 0, a: seat !== null ? 'sit|' : 'idle|', seat, paper: null };
+      const zone = m.zone === 'yard' ? 'yard' : 'class';
+      const seat = zone === 'class' ? takeSeat(ws.pid, m.seat) : null;
+      const p = { id: ws.pid, name: u.name, look: u.equipped, zone, p: vec(m.p), r: 0, a: seat !== null ? 'sit|' : 'idle|', seat, paper: null, k: null };
       room.players.set(ws.pid, p);
       broadcast({ t: 'join', player: p });
       broadcastSeats();
+      send(ws, { t: 'bm', matches: [...matches.values()].map(matchPublic) });
       break;
     }
     case 'leave': leave(ws); break;
+    case 'online':                       // danh sách người đang online để mời đánh cầu
+      send(ws, { t: 'online', users: [...sockets].filter((o) => o !== ws && o.readyState === 1).map((o) => {
+        const p = room.players.get(o.pid);
+        const mm = matchOf(o.pid);
+        return { id: o.pid, name: o.user.name, level: level(o.user.xp), where: p ? p.zone : 'menu', playing: !!(mm && mm.A != null && mm.B != null),
+          friend: (u.friends || []).includes(o.user.name.toLowerCase()) };
+      }), friends: friendList(u) });
+      break;
     case 'state':
       if (!pl) return;
-      pl.p = vec(m.p); pl.r = num(m.r, 100); pl.a = String(m.a || 'idle|').slice(0, 16);
-      broadcast({ t: 'state', id: pl.id, p: pl.p, r: pl.r, a: pl.a }, ws);
+      pl.p = vec(m.p); pl.r = num(m.r, 100); pl.a = String(m.a || 'idle|').slice(0, 16); pl.k = vec3(m.k);
+      broadcast({ t: 'state', id: pl.id, p: pl.p, r: pl.r, a: pl.a, k: pl.k }, ws);
       break;
     case 'seat': {
       if (!pl) return;
@@ -467,9 +851,12 @@ wss.on('connection', (ws, req) => {
   ws.user = u;
   ws.pid = nextId++;
   sockets.add(ws);
-  send(ws, { t: 'welcome', id: ws.pid, players: [...room.players.values()], seats: room.seats, strokes: room.strokes });
+  send(ws, { t: 'welcome', id: ws.pid, players: [...room.players.values()], seats: room.seats, strokes: room.strokes,
+    quiz: quiz && { id: quiz.id, by: quiz.byUser.name, byPid: quiz.byPid, q: quiz.q, options: quiz.options, endsAt: quiz.endsAt } });
+  send(ws, { t: 'friends', friends: friendList(u) });
+  for (const f of u.friends.map((k) => db.users[k]).filter(Boolean)) pushFriends(f);   // báo bạn bè: mình vừa online
   ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } handle(ws, m); });
-  ws.on('close', () => { sockets.delete(ws); leave(ws); });
+  ws.on('close', () => { sockets.delete(ws); leave(ws, 'disconnect'); for (const f of (u.friends || []).map((k) => db.users[k]).filter(Boolean)) pushFriends(f); });
 });
 
 server.listen(PORT, () => console.log(`Lớp mình 3D đang chạy tại http://localhost:${PORT}`));

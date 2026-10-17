@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -32,11 +32,14 @@
     <div class="who"><b id="tb-name"></b><span id="tb-level" class="lv"></span></div>
     <div class="cur" title="Xu"><span>🪙</span><b id="tb-coins">0</b></div>
     <div class="cur" title="Kim cương"><span>💎</span><b id="tb-gems">0</b></div>
+    <div class="cur" title="Hoa Điểm 10"><span>🌸</span><b id="tb-flowers">0</b></div>
     <div id="tb-event" class="event-pill hidden"></div>
     <nav>
       <button data-nav="class" class="btn sm">🏫 Lớp học</button>
+      <button data-nav="yard" class="btn sm">🌳 Sân trường</button>
       <button data-nav="quest" class="btn sm">🗺️ Kho tàng</button>
       <button data-nav="shop" class="btn sm">🛍️ Cửa hàng <kbd>B</kbd></button>
+      <button data-nav="people" class="btn sm">👥 Bạn bè <kbd>I</kbd><i id="tb-fdot" class="dot hidden"></i></button>
       <button data-nav="events" class="btn sm">🎉 Sự kiện <kbd>N</kbd><i id="tb-dot" class="dot hidden"></i></button>
       <button data-nav="menu" class="btn sm ghost" title="Về sảnh">⌂</button>
       <button data-nav="logout" class="btn sm ghost" title="Đăng xuất">⏏</button>
@@ -49,6 +52,7 @@
     <p class="sub">Chọn nơi bạn muốn đến hôm nay</p>
     <div class="cards">
       <button class="card" data-nav="class"><i>🏫</i><b>Vào lớp học</b><span>Chọn chỗ ngồi, làm bài, viết bảng, trò chuyện cùng bạn bè</span></button>
+      <button class="card" data-nav="yard"><i>🌳</i><b>Sân trường</b><span>Dạo dưới tán hoa anh đào, mời bạn đấu cầu lông</span></button>
       <button class="card" data-nav="quest"><i>🗺️</i><b>Kho tàng tri thức</b><span>Vượt 10 ải câu hỏi văn hóa, nhận rương báu</span></button>
       <button class="card" data-nav="shop"><i>🛍️</i><b>Cửa hàng</b><span>Áo dài, nón lá, đèn ông sao… và khóa học mới</span></button>
       <button class="card" data-nav="events"><i>🎉</i><b>Sự kiện</b><span>Điểm danh, nhiệm vụ ngày, lễ hội, bảng xếp hạng</span></button>
@@ -64,11 +68,14 @@
     <div id="click-hint">Click vào màn hình để điều khiển</div>
     <aside id="help">
       <b>Điều khiển</b>
-      <div><kbd>W A S D</kbd> di chuyển · <kbd>Shift</kbd> chạy</div>
+      <div><kbd>W A S D</kbd> di chuyển · <kbd>Shift</kbd> chạy · <kbd>Space</kbd> nhảy</div>
+      <div><kbd>Chuột trái</kbd> đấm (trái/phải) — trúng người khác sẽ đẩy lùi họ</div>
       <div><kbd>Chuột</kbd> xoay · <kbd>Chuột phải</kbd> ngắm gần · <kbd>Lăn</kbd> zoom</div>
       <div><kbd>V</kbd> đổi TPP/FPP · <kbd>Alt</kbd> giữ để nhìn tự do</div>
       <div><kbd>E</kbd> ngồi / đứng / viết bảng · <kbd>X</kbd> làm bài · <kbd>F</kbd> xem bài</div>
       <div><kbd>1</kbd> vẫy tay <kbd>2</kbd> giơ tay <kbd>3</kbd> vỗ tay <kbd>4</kbd> gật đầu</div>
+      <div><kbd>I</kbd> người chơi online · <kbd>R</kbd> oẳn tù tì với người gần nhất · <kbd>T</kbd> chơi lại</div>
+      <div><kbd>M</kbd> ngày / đêm ở sân trường</div>
       <div><kbd>Enter</kbd> chat · <kbd>H</kbd> ẩn bảng này</div>
     </aside>
     <div id="chat">
@@ -80,10 +87,76 @@
     </div>
   </section>
 
+  <!-- ===== Cầu lông ===== -->
+  <section id="bm-hud" class="hidden">
+    <div id="bm-score"></div>
+    <div id="bm-serve"></div>
+    <div id="bm-shot"></div>
+    <div class="bm-help">🖱️ Chuột = vợt · vút <b>lên</b> mạnh = cầu bổng xa · vợt cao + đập <b>xuống</b> = smash · chạm nhẹ = bỏ nhỏ · <kbd>WASD</kbd> chạy · <kbd>Shift</kbd> nhanh</div>
+    <div class="bm-actions">
+      <button id="bm-invite" class="btn sm gold">📨 Mời bạn chơi (I)</button>
+      <button id="bm-pause" class="btn sm">⏸ Tạm dừng (P)</button>
+      <button id="bm-leave" class="btn sm">🚪 Rời sân (Q)</button>
+    </div>
+  </section>
+  <div id="bm-msg" class="hidden"></div>
+  <button id="daynight" class="btn sm hidden">☀️ Ban ngày (M)</button>
+  <div id="bm-pause-msg" class="hidden"></div>
+
+  <!-- Popup dùng chung: lời mời cầu lông / kết bạn / trao đổi / oẳn tù tì (hiện ở bất cứ đâu trong game) -->
+  <div id="invite-pop" class="hidden">
+    <div class="ip-text"></div>
+    <div class="row center"><button id="ip-yes" class="btn primary sm">Đồng ý</button><button id="ip-no" class="btn sm">Từ chối</button></div>
+  </div>
+
+  <div id="modal-invite" class="modal"><div class="panel wide">
+    <div class="shop-head"><h2>👥 Người chơi online</h2><button class="btn ghost sm" data-close>✕</button></div>
+    <p class="sub">Bạn bè luôn ở trên cùng. Mời bất kỳ ai (kể cả người lạ) đánh cầu lông, oẳn tù tì, trao đổi đồ hoặc kết bạn — họ nhận thông báo dù đang ở đâu trong game.</p>
+    <div id="online-list"><p class="sub">Đang tải…</p></div>
+    <div class="row end"><button id="online-refresh" class="btn sm">↻ Làm mới</button></div>
+  </div></div>
+
+  <!-- Ra câu hỏi trên bảng (cần Phấn Ra Đề) -->
+  <div id="modal-quizmake" class="modal"><div class="panel">
+    <div class="shop-head"><h2>🪄 Ra câu hỏi cho cả trường</h2><button class="btn ghost sm" data-close>✕</button></div>
+    <p class="sub">Câu hỏi hiện lên bảng và gửi popup tới mọi người đang online. Ai trả lời đúng trong 40 giây nhận <b>🌸 Hoa Điểm 10</b> + 10 xu; bạn được +5 xu cho mỗi người đúng. Phấn Ra Đề không bị mất.</p>
+    <label>Câu hỏi<input id="qm-q" maxlength="160" placeholder="vd: Bánh chưng tượng trưng cho gì?"></label>
+    <div id="qm-opts"></div>
+    <p class="hint">Bấm vào chữ cái A/B/C/D để chọn đáp án đúng.</p>
+    <div class="row end"><button class="btn ghost" data-close>Huỷ</button><button id="qm-send" class="btn primary">📣 Gửi câu hỏi</button></div>
+  </div></div>
+  <div id="quiz-pop" class="hidden">
+    <div class="qp-head"><b id="qp-by"></b><span id="qp-timer"></span></div>
+    <div id="qp-q"></div>
+    <div id="qp-opts" class="options"></div>
+    <div id="qp-res" class="hint"></div>
+    <button id="qp-close" class="btn ghost sm">✕</button>
+  </div>
+
+  <!-- Trao đổi đồ -->
+  <div id="modal-trade" class="modal"><div class="panel wide">
+    <div class="shop-head"><h2>🔁 Trao đổi với <span id="tr-name"></span></h2><button class="btn ghost sm" data-close>✕</button></div>
+    <p class="sub">Chọn món bạn đưa và món bạn muốn nhận. Khi đối phương đồng ý, server đổi cùng lúc cho cả hai.</p>
+    <div class="trade-cols">
+      <div><h3>Bạn đưa</h3><div id="tr-give" class="trade-grid"></div><label>🌸 Hoa Điểm 10 <input id="tr-give-fl" type="number" min="0" value="0"></label></div>
+      <div><h3>Bạn nhận</h3><div id="tr-want" class="trade-grid"></div><label>🌸 Hoa Điểm 10 <input id="tr-want-fl" type="number" min="0" value="0"></label></div>
+    </div>
+    <div class="row end"><button class="btn ghost" data-close>Huỷ</button><button id="tr-send" class="btn primary">Gửi đề nghị</button></div>
+  </div></div>
+
+  <!-- Oẳn tù tì -->
+  <div id="rps-pop" class="hidden">
+    <div id="rps-title"></div>
+    <div class="rps-row"><button data-rps="rock">✊<span>Búa</span></button><button data-rps="scissors">✌️<span>Kéo</span></button><button data-rps="paper">✋<span>Bao</span></button></div>
+    <div id="rps-timer" class="hint"></div>
+  </div>
+
+
   <!-- ===== Công cụ bảng đen ===== -->
   <div id="board-tools" class="hidden">
     <span>Phấn:</span><div id="chalk-list"></div>
     <label>Cỡ <input id="chalk-size" type="range" min="3" max="24" value="7"></label>
+    <button id="board-quiz" class="btn sm gold">🪄 Ra câu hỏi</button>
     <button id="board-clear" class="btn sm">🧽 Lau bảng</button>
     <button id="board-exit" class="btn sm primary">Xong (Esc)</button>
   </div>

@@ -2,10 +2,10 @@
 import * as THREE from 'three';
 import { api } from './net.js';
 import { createAvatar } from './avatar.js';
-import { ITEMS, ITEM_MAP, RARITY, SLOTS } from './data/items.js';
+import { ITEMS, ITEM_MAP, RARITY, SLOTS, FLOWER } from './data/items.js';
 import { $, esc, toast, openModal, fmt } from './ui.js';
 
-const TABS = [['featured', '⭐ Nổi bật'], ['skin', SLOTS.skin], ['hat', SLOTS.hat], ['bag', SLOTS.bag], ['chalk', SLOTS.chalk], ['course', SLOTS.course]];
+const TABS = [['featured', '⭐ Nổi bật'], ['skin', SLOTS.skin], ['hat', SLOTS.hat], ['bag', SLOTS.bag], ['chalk', SLOTS.chalk], ['tool', '🪄 ' + SLOTS.tool], ['course', SLOTS.course], ['bag-inv', '🎒 Túi đồ']];
 
 export class Shop {
   constructor(hooks) {
@@ -68,7 +68,9 @@ export class Shop {
     for (const b of $('#shop-tabs').children) b.classList.toggle('on', b.dataset.tab === this.tab);
     const list = this.tab === 'featured'
       ? this.featured.ids.map((id) => ITEM_MAP[id]).filter(Boolean)
-      : ITEMS.filter((i) => i.type === this.tab && !i.hidden);
+      : this.tab === 'bag-inv'
+        ? [...((p.bag?.[FLOWER] || 0) > 0 ? [ITEM_MAP[FLOWER]] : []), ...p.owned.map((id) => ITEM_MAP[id]).filter((i) => i && i.price > 0)]
+        : ITEMS.filter((i) => i.type === this.tab && !i.hidden);
     const banner = this.tab === 'featured'
       ? `<div class="featured-banner">🔥 Hàng nổi bật hôm nay — giảm ${Math.round(this.featured.discount * 100)}%. Làm mới lúc 0h mỗi ngày.</div>` : '';
     $('#shop-grid').innerHTML = banner + list.map((it) => {
@@ -79,7 +81,7 @@ export class Shop {
       return `<button class="item ${this.sel === it.id ? 'sel' : ''}" data-id="${it.id}" style="--rc:${RARITY[it.rarity].color}">
         ${equipped ? '<span class="tag">ĐANG DÙNG</span>' : owned ? '<span class="tag">ĐÃ CÓ</span>' : pr.sale ? '<span class="tag sale">-20%</span>' : ''}
         <span class="ic">${it.icon}</span><span class="nm">${esc(it.name)}</span>
-        <span class="pr">${owned ? '✔' : it.price === 0 ? 'Miễn phí' : `${pr.sale ? `<s>${fmt(it.price)}</s>` : ''}${cur} ${fmt(pr.now)}`}</span></button>`;
+        <span class="pr">${it.type === 'collect' ? '× ' + (p.bag?.[it.id] || 0) : owned ? '✔' : it.price === 0 ? 'Miễn phí' : `${pr.sale ? `<s>${fmt(it.price)}</s>` : ''}${cur} ${fmt(pr.now)}`}</span></button>`;
     }).join('');
     this.renderDetail();
   }
@@ -101,7 +103,9 @@ export class Shop {
     const pr = this.price(it);
     const cur = it.currency === 'gems' ? '💎' : '🪙';
     let btn;
-    if (it.type === 'course') btn = owned ? '<button class="btn" disabled>Đã mở khóa</button>' : `<button class="btn gold" id="shop-buy">Mở khóa · ${cur} ${fmt(pr.now)}</button>`;
+    if (it.type === 'collect') btn = `<button class="btn" disabled>Đang có × ${p.bag?.[it.id] || 0}</button>`;
+    else if (it.type === 'tool') btn = owned ? '<button class="btn" disabled>Đang có (dùng 1 lần)</button>' : `<button class="btn gold" id="shop-buy">Mua · ${cur} ${fmt(pr.now)}</button>`;
+    else if (it.type === 'course') btn = owned ? '<button class="btn" disabled>Đã mở khóa</button>' : `<button class="btn gold" id="shop-buy">Mở khóa · ${cur} ${fmt(pr.now)}</button>`;
     else if (equipped) btn = '<button class="btn" disabled>Đang sử dụng</button>';
     else if (owned) btn = '<button class="btn primary" id="shop-equip">Trang bị</button>';
     else btn = `<button class="btn gold" id="shop-buy">Mua · ${cur} ${fmt(pr.now)}</button>`;
@@ -116,7 +120,7 @@ export class Shop {
       const r = await api('/shop/buy', { id: it.id });
       this.h.onProfile(r.profile);
       toast(`Đã mua ${it.icon} ${esc(it.name)}!`, 'ok');
-      if (it.type !== 'course') await this.equip(it);
+      if (!['course', 'tool'].includes(it.type)) await this.equip(it);
       else this.render();
     } catch (e) { toast(e.message, 'err'); }
   }

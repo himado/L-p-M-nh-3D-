@@ -40,8 +40,13 @@ Trình duyệt (Three.js r160, ES modules, không cần build)
  ├─ npc.js        cô giáo đi tuần (vị trí tính theo đồng hồ → mọi máy thấy giống nhau) + bạn học ảo
  ├─ board.js      nét phấn lưu theo UV → đồng bộ cho mọi người
  ├─ exam.js       bài kiểm tra theo ca thi 10 phút (cả lớp cùng đề) + quay cóp
+ ├─ social.js     bạn bè, popup lời mời, ra câu hỏi trên bảng (Phấn Ra Đề → Hoa Điểm 10), trao đổi đồ, oẳn tù tì
  ├─ papers.js     tờ bài làm 3D trên từng bàn (đáp án cập nhật trực tiếp), xem phóng to bằng F
  ├─ quest.js      scene vượt ải riêng
+ ├─ yard.js       sân trường (dựng lười khi ra sân): 1 cây anh đào voxel khổng lồ (khối 0.5m đều nhau, chỉ vẽ khối lộ mặt,
+ │                2 draw call), cánh hoa rơi, ngày/đêm (đêm: cây phát sáng, sao, đom đóm), ghế đá quanh gốc ngồi được
+ ├─ badminton.js  cầu lông kiểu Pingpong Fury: chuột = vợt, tốc độ vung = lực; vật lý cản không khí; AI; PvP
+ │                nhiều trận song song trên một sân (mỗi cặp một phiên), mời người online, tạm dừng, rời trận có thông báo
  ├─ shop.js       cửa hàng + phòng thử đồ 3D
  └─ events.js     điểm danh, nhiệm vụ, lễ hội, xếp hạng
         │  REST (/api/*)                     │  WebSocket (/ws)
@@ -60,7 +65,11 @@ Node.js server (server/index.js)
 
 | Phím | Chức năng |
 |---|---|
-| WASD / Shift | Đi / chạy |
+| WASD / Shift / **Space** | Đi / chạy / **nhảy** |
+| **Chuột trái** | Đấm tay trái/phải xen kẽ (kiểu Minecraft) — trúng người khác thì họ bị đẩy lùi, hiện 💢 |
+| **I** | Bảng người chơi online (bạn bè trên đầu): mời cầu lông, oẳn tù tì, trao đổi đồ, kết bạn |
+| **R** / **T** | Oẳn tù tì với người đứng gần nhất / chơi lại với người vừa đấu — thắng được cốc đầu 👊 |
+| **M** | Đổi ngày / đêm ở sân trường (mặc định theo giờ Việt Nam) |
 | Chuột · Lăn chuột | Xoay camera · zoom TPP |
 | **V** | Đổi góc nhìn **TPP ↔ FPP** |
 | **Giữ Alt** | **Free look**: nhìn 360° mà thân không xoay; thả ra camera tự quay về |
@@ -69,6 +78,7 @@ Node.js server (server/index.js)
 | **F** | **Xem tờ bài làm** của bàn gần nhất (đang ngồi → bạn cùng bàn) |
 | X | Làm bài kiểm tra (khi đang ngồi) |
 | Giữ C (khi thi) | Quay cóp: ngó sang bàn bên, sau 1.3 giây thấy rõ bài bạn (bài đó chưa chắc đúng!) |
+| **Cầu lông** | WASD chạy · **chuột = vợt** · vút lên mạnh = cầu bổng xa · vợt cao + đập xuống = smash · chạm nhẹ = bỏ nhỏ · **I** mời bạn online · **P** tạm dừng/tiếp tục · **Q** rời sân (2 lần nếu chưa hết ván) |
 | 1–4 | Vẫy tay, giơ tay phát biểu, vỗ tay, gật đầu |
 | Enter / Tab | Chat / đổi Cả lớp ↔ Thì thầm (chỉ người trong bán kính 4m nghe được) |
 
@@ -96,6 +106,8 @@ Node.js server (server/index.js)
 | **Sự kiện thường niên** | Fortnite, Genshin | Tết, Giỗ Tổ, Trung Thu, 20/11, 2/9, Khai giảng, Halloween, Giáng sinh, nhân xu x1.5–x2 | ✅ |
 | **Bảng xếp hạng** | Mọi game cạnh tranh | Theo XP; sau này thêm bảng tuần, bảng theo lớp/trường | ✅ |
 | **Battle Pass / "Sổ liên lạc"** | Fortnite, PUBG, Liên Quân | Mùa 3 tháng, 50 cấp, nhánh miễn phí và nhánh cao cấp | 🔜 |
+| **Kết bạn, trao đổi, mini-game** | Liên Quân, Roblox | Kết bạn, đổi đồ an toàn (server đổi cùng lúc), oẳn tù tì cốc đầu, học sinh ra đề cho cả trường | ✅ |
+| **Đề thi theo chủ đề ngày** | Duolingo | 7 chủ đề xoay vòng: Lễ Tết, Di sản, Lịch sử, Nghệ thuật, Châu Á, Thế giới, Tổng hợp | ✅ |
 | **Thành tựu & danh hiệu** | Steam, Xbox | "Trạng nguyên" (100 câu đúng), "Sĩ tử liều" (bị bắt quay cóp 10 lần) | 🔜 |
 | **Thi đấu theo giờ** (Live quiz) | Kahoot, Trivia Crack | 20h mỗi tối: cả server trả lời cùng lúc, top 10 nhận quà | 🔜 |
 | **Hội nhóm / Lớp** | Clan trong Liên Quân | Lập lớp, thi đua giữa các lớp, thầy cô tạo đề riêng | 🔜 |

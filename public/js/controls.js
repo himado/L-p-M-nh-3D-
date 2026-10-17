@@ -19,6 +19,8 @@ export class PlayerController {
     this.pitch = -0.12;
     this.view = 'tpp';
     this.dist = 2.4;
+    this.maxDist = 4.5;               // sân trường cho lùi camera xa hơn để thấy trọn cây
+    this.baseFov = 70;
     this.aim = false;
     this.freeLook = false;
     this.returning = false;
@@ -30,6 +32,9 @@ export class PlayerController {
     this.running = false;
     this.keys = new Set();
     this.lockable = () => false;
+    this.onSwing = () => {};
+    this.y = 0; this.vy = 0;                 // nhảy (Space)
+    this.kx = 0; this.kz = 0;                // vận tốc bị đẩy lùi khi trúng đòn
     this.onViewChange = () => {};
     this.ray = new THREE.Raycaster();
 
@@ -38,7 +43,7 @@ export class PlayerController {
       if (!this.locked || this.peekTarget) return;
       const s = 0.0022 * (this.aim ? 0.55 : 1);
       this.yaw -= e.movementX * s;
-      this.pitch = clamp(this.pitch - e.movementY * s, -1.25, 1.1);
+      this.pitch = clamp(this.pitch - e.movementY * s, -1.25, this.maxDist > 6 ? 1.4 : 1.1);
     });
     addEventListener('keydown', (e) => {
       if (isTyping(e)) return;
@@ -48,32 +53,47 @@ export class PlayerController {
         if (!this.freeLook && this.enabled) { this.freeLook = true; this.returning = false; this.saved = { yaw: this.yaw, pitch: this.pitch }; }
       }
       if (e.code === 'KeyV' && this.enabled) this.setView(this.view === 'tpp' ? 'fpp' : 'tpp');
+      if (e.code === 'Space' && this.enabled) { e.preventDefault(); if (!this.seated && this.y <= 0.001) this.vy = 5.2; }
     });
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
       if (e.code.startsWith('Alt')) { e.preventDefault(); if (this.freeLook) { this.freeLook = false; this.returning = true; } }
     });
-    dom.addEventListener('mousedown', (e) => { if (e.button === 2 && this.locked) this.aim = true; });
+    dom.addEventListener('mousedown', (e) => {
+      if (e.button === 2 && this.locked) this.aim = true;
+      if (e.button === 0 && this.locked && this.enabled && !this.seated) this.onSwing();
+    });
     addEventListener('mouseup', (e) => { if (e.button === 2) this.aim = false; });
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
-    dom.addEventListener('wheel', (e) => { if (this.locked) this.dist = clamp(this.dist + Math.sign(e.deltaY) * 0.3, 1.2, 4.5); }, { passive: true });
+    dom.addEventListener('wheel', (e) => { if (this.locked) this.dist = clamp(this.dist + Math.sign(e.deltaY) * (this.maxDist > 6 ? 0.6 : 0.3), 1.2, this.maxDist); }, { passive: true });
     addEventListener('blur', () => { this.keys.clear(); this.aim = false; });
   }
 
   get locked() { return document.pointerLockElement === this.dom; }
+  get airborne() { return this.y > 0.03; }
+
+  /** Bị đấm: văng theo hướng (dx, dz) và nảy lên một chút. */
+  knock(dx, dz, power = 6) {
+    if (this.seated) return;
+    this.kx = dx * power; this.kz = dz * power;
+    this.vy = Math.max(this.vy, 3);
+  }
 
   setView(v) { this.view = v; this.onViewChange(v); }
 
+  /** Ngồi xuống ghế (ghế lớp học nhìn về bảng; ghế đá có hướng riêng seat.yaw). */
   sitAt(seat) {
     this.seated = true;
+    this.y = 0; this.vy = 0;
     this.pos.set(seat.pos.x, 0, seat.pos.z);
-    this.bodyYaw = 0;
-    this.yaw = 0;
+    this.bodyYaw = this.yaw = seat.yaw ?? 0;
     this.pitch = -0.2;
   }
-  stand() {
+  /** Đứng dậy: ghế lớp học lùi ra sau (bàn ở trước mặt); ghế đá bước lên phía trước. */
+  stand(forward = false) {
     this.seated = false;
-    this.pos.z += 0.45;
+    if (forward) { this.pos.x -= Math.sin(this.bodyYaw) * 0.65; this.pos.z -= Math.cos(this.bodyYaw) * 0.65; }
+    else this.pos.z += 0.45;
     this.collide(this.pos);
   }
   // Quay cóp: camera bị kéo sang bàn bạn bên cạnh, thả ra thì quay lại.
@@ -120,6 +140,16 @@ export class PlayerController {
     } else if ((this.view === 'fpp' || this.aim) && !this.seated && !this.freeLook) {
       this.bodyYaw += angDiff(this.bodyYaw, this.yaw) * k;
     }
+    // Trọng lực & đẩy lùi
+    this.vy -= 13 * dt;
+    this.y += this.vy * dt;
+    if (this.y <= 0) { this.y = 0; this.vy = 0; }
+    if (this.seated) { this.y = 0; this.kx = this.kz = 0; }
+    if (Math.abs(this.kx) + Math.abs(this.kz) > 0.01) {
+      this.pos.x += this.kx * dt; this.pos.z += this.kz * dt;
+      const f = Math.exp(-5 * dt); this.kx *= f; this.kz *= f;
+      this.collide(this.pos);
+    }
     this.updateCamera(dt);
   }
 
@@ -147,8 +177,8 @@ export class PlayerController {
   updateCamera(dt) {
     const cam = this.camera;
     const fpp = this.view === 'fpp';
-    const eyeY = this.seated ? 1.26 : 1.63;
-    const targetFov = this.aim ? 48 : fpp ? 80 : 70;
+    const eyeY = (this.seated ? 1.26 : 1.63) + this.y;
+    const targetFov = this.aim ? 48 : fpp ? this.baseFov + 10 : this.baseFov;
     if (Math.abs(cam.fov - targetFov) > 0.05) {
       cam.fov += (targetFov - cam.fov) * (1 - Math.exp(-12 * dt));
       cam.updateProjectionMatrix();
